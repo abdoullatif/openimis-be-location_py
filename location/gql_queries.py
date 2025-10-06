@@ -137,12 +137,10 @@ class UserRegionGQLType(graphene.ObjectType):
 
     def __init__(self, region):
         if region:
-            self.id = str(
-                base64.b64encode(f"LocationGQLType:{region.id}".encode()), "utf-8"
-            )
-            self.uuid = region.uuid
-            self.code = region.code
-            self.name = region.name
+            self.id = str(base64.b64encode(f"LocationGQLType:{region.id}".encode()), "utf-8")
+            self.uuid = str(region.uuid)
+            self.code = str(region.code)
+            self.name = str(region.name)
 
 
 class UserDistrictGQLType(graphene.ObjectType):
@@ -154,14 +152,20 @@ class UserDistrictGQLType(graphene.ObjectType):
 
     def __init__(self, district):
         if district:
+            # Encodage base64 du type + ID
             self.id = str(
                 base64.b64encode(f"LocationGQLType:{district.location_id}".encode()),
                 "utf-8",
             )
-            self.uuid = district.location.uuid
-            self.code = district.location.code
-            self.name = district.location.name
-            self.parent = UserRegionGQLType(district.location.parent)
+
+            # Conversion explicite en chaîne pour éviter les objets scalaires Graphene
+            self.uuid = str(district.location.uuid)
+            self.code = str(district.location.code)
+            self.name = str(district.location.name)
+
+            # Parent = région associée
+            parent_region = getattr(district.location, "parent", None)
+            self.parent = UserRegionGQLType(parent_region) if parent_region else None
 
 
 class UserDistrictType(DjangoObjectType):
