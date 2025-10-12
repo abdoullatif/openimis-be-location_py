@@ -162,10 +162,7 @@ class UserDistrictGQLType(graphene.ObjectType):
             self.uuid = str(district.location.uuid)
             self.code = str(district.location.code)
             self.name = str(district.location.name)
-
-            # Parent = région associée
-            parent_region = getattr(district.location, "parent", None)
-            self.parent = UserRegionGQLType(parent_region) if parent_region else None
+            self.parent = UserRegionGQLType(district.location.parent)
 
 
 class UserDistrictType(DjangoObjectType):
