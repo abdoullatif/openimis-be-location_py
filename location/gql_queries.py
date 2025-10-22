@@ -136,11 +136,20 @@ class UserRegionGQLType(graphene.ObjectType):
     name = graphene.String()
 
     def __init__(self, region):
-        if region:
-            self.id = str(base64.b64encode(f"LocationGQLType:{region.id}".encode()), "utf-8")
-            self.uuid = str(region.uuid)
-            self.code = str(region.code)
-            self.name = str(region.name)
+        self.region = region
+
+    def resolve_id(self, info):
+        return str(base64.b64encode(f"LocationGQLType:{self.region.id}".encode()), "utf-8")
+
+    def resolve_uuid(self, info):
+        return str(self.region.uuid)
+
+    def resolve_code(self, info):
+        return str(self.region.code)
+
+    def resolve_name(self, info):
+        return str(self.region.name)
+
 
 
 class UserDistrictGQLType(graphene.ObjectType):
@@ -151,18 +160,23 @@ class UserDistrictGQLType(graphene.ObjectType):
     parent = graphene.Field(UserRegionGQLType)
 
     def __init__(self, district):
-        if district:
-            # Encodage base64 du type + ID
-            self.id = str(
-                base64.b64encode(f"LocationGQLType:{district.location_id}".encode()),
-                "utf-8",
-            )
+        self.district = district
 
-            # Conversion explicite en chaîne pour éviter les objets scalaires Graphene
-            self.uuid = str(district.location.uuid)
-            self.code = str(district.location.code)
-            self.name = str(district.location.name)
-            self.parent = UserRegionGQLType(district.location.parent)
+    def resolve_id(self, info):
+        return str(base64.b64encode(f"LocationGQLType:{self.district.location_id}".encode()), "utf-8")
+
+    def resolve_uuid(self, info):
+        return str(self.district.location.uuid)
+
+    def resolve_code(self, info):
+        return str(self.district.location.code)
+
+    def resolve_name(self, info):
+        return str(self.district.location.name)
+
+    def resolve_parent(self, info):
+        return UserRegionGQLType(self.district.location.parent)
+
 
 
 class UserDistrictType(DjangoObjectType):
