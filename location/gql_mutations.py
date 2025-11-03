@@ -2,7 +2,7 @@ import graphene
 from .apps import LocationConfig
 from core import assert_string_length, filter_validity
 from core.schema import OpenIMISMutation
-from .models import Location, HealthFacility, UserDistrict
+from .models import Location, HealthFacility, UserDistrict, UserMunicipality
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils.translation import gettext as _
@@ -157,7 +157,9 @@ class DeleteLocationMutation(OpenIMISMutation):
             location.validity_to = now
             location.save()
             if location.type == "D":
-                cls.__delete_user_districts(location, now)
+                cls.__delete_user_links(UserDistrict, location, now)
+            elif location.type == "W":
+                cls.__delete_user_links(UserMunicipality, location, now)
             return None
         except Exception as exc:
             return [
@@ -170,16 +172,21 @@ class DeleteLocationMutation(OpenIMISMutation):
 
     @classmethod
     def __delete_user_districts(cls, location: Location, location_delete_date=None):
-
         if location_delete_date is None:
             from core import datetime
-
             location_delete_date = datetime.datetime.now()
-
         UserDistrict.objects.filter(location=location, validity_to__isnull=True).update(
             validity_to=location_delete_date
         )
 
+    @classmethod
+    def __delete_user_links(cls, model, location, location_delete_date=None):
+        from core import datetime
+        if location_delete_date is None:
+            location_delete_date = datetime.datetime.now()
+        model.objects.filter(location=location, validity_to__isnull=True).update(
+            validity_to=location_delete_date
+        )
 
 def tree_reset_types(parent, location, new_level):
     if new_level >= len(LocationConfig.location_types):

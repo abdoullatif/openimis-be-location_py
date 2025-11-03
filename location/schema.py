@@ -19,12 +19,14 @@ from location.gql_queries import (
     UserDistrictGQLType,
     LocationGQLType,
     HealthFacilityGQLType,
+    UserMunicipalityGQLType
 )
 from location.models import (
     HealthFacility,
     Location,
     LocationManager,
     UserDistrict,
+    UserMunicipality,
     LocationMutation,
     HealthFacilityMutation,
 )
@@ -55,6 +57,7 @@ class Query(graphene.ObjectType):
         str=graphene.String(),
     )
     user_districts = graphene.List(UserDistrictGQLType)
+    user_municipalities = graphene.List(UserMunicipalityGQLType)
     officer_locations = graphene.List(
         LocationGQLType,
         officer_code=graphene.String(required=True),
@@ -175,6 +178,18 @@ class Query(graphene.ObjectType):
         return [
             UserDistrictGQLType(d)
             for d in UserDistrict.get_user_districts(info.context.user._u)
+        ]
+
+    def resolve_user_municipalities(self, info, **kwargs):
+        if info.context.user.is_anonymous:
+            raise PermissionDenied(_("unauthorized"))
+        if not isinstance(info.context.user._u, core_models.InteractiveUser):
+            raise NotImplementedError(
+                "Only Interactive Users are registered for municipalities"
+            )
+        return [
+            UserMunicipalityGQLType(d)
+            for d in UserMunicipality.get_user_municipalities(info.context.user._u)
         ]
 
     def resolve_officer_locations(self, info, **kwargs):

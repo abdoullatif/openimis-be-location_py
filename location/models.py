@@ -222,6 +222,10 @@ class LocationManager(CachedManager):
                         *filter_validity(),
                     ).values_list("location_id", flat=True)
                 )
+            elif UserMunicipality.objects.filter(user=user).exists():
+                allowed = [
+                    m.location_id for m in UserMunicipality.get_user_municipalities(user)
+                ]
             else:
                 allowed = [
                     d.location_id for d in UserDistrict(user).get_user_districts(user)
@@ -666,6 +670,108 @@ class UserDistrict(core_models.VersionedModel):
             pass
         return queryset
 
+class UserMunicipality(core_models.VersionedModel):
+    id = models.AutoField(db_column="UserMunicipalityID", primary_key=True)
+    user = models.ForeignKey(
+        core_models.InteractiveUser, models.DO_NOTHING, db_column="UserID"
+    )
+    location = models.ForeignKey(Location, models.DO_NOTHING, db_column="LocationId")
+    audit_user_id = models.IntegerField(db_column="AuditUserID")
+
+    class Meta:
+        managed = True
+        db_table = "tblUsersMunicipalities"
+
+    @classmethod
+    def get_user_municipalities(cls, user):
+        """
+        Retrieve the list of UserMunicipalities for a user, the locations are prefetched on two levels.
+        :param user: InteractiveUser to filter on
+        :return: UserMunicipality *objects*
+        """
+        if hasattr(user, "_u"):
+            user = user._u
+        cachedata = cache.get(f"user_municipalities1_{user.id}")
+        municipalities = []
+        if cachedata is None:
+            cache_location_if_not_cached()
+            cache_location_type = cache.get("location_types")
+            cachedata = []
+            if user.is_superuser:
+                for loc in cache_location_type['W']:
+                    cachedata.append([0, loc])
+            elif not isinstance(user, core_models.InteractiveUser):
+                if isinstance(user, core_models.TechnicalUser):
+                    logger.warning(
+                        f"get_user_municipalities called with a technical user `{user.username}`. "
+                        "We'll return an empty list, but it should be handled before reaching here."
+                    )
+            else:
+                municipalities = (
+                    UserMunicipality.objects.filter(
+                        user=user,
+                        location__type="W",
+                        location__parent__parent__isnull=False,
+                        *filter_validity(),
+                        *filter_validity(prefix="location__"),
+                    )
+                    .order_by("location__parent__parent__code")
+                    .order_by("location__code")
+                )
+            for d in municipalities:
+                cachedata.append([d.id, d.location_id])
+
+            cache.set(f"user_municipalities_{user.id}", cachedata)
+
+        if not municipalities and cachedata:
+            missing_location_ids = set()
+            for d in cachedata:
+                location = cache.get(f"location_{d[1]}")
+                if not location:
+                    logger.warning(f"municipality  {d[0]}:{d[1]} does not use a cached location")
+                    missing_location_ids.add(d[1])
+                else:
+                    if location.parent_id:
+                        location.parent = cache.get(f"location_{location.parent_id}")
+                    municipalities.append(UserMunicipality(id=d[0], user=user, location=location))
+
+            if missing_location_ids:
+                missing_locs = Location.objects.filter(id__in=missing_location_ids)
+                for loc in missing_locs:
+                    cache.set(f"location_{loc.id}", loc, timeout=None)
+                    municipalities.append(UserMunicipality(id=0, user=user, location=loc))
+
+        return municipalities
+
+    @classmethod
+    def get_user_locations(cls, user):
+        """
+        Retrieve the list of Locations in the UserDistricts of a certain user.
+        :param user: InteractiveUser to filter on
+        :return: Location objects to filter on.
+        """
+        if not core_models.InteractiveUser.is_interactive_user(user):
+            return Location.objects.none()
+        return (
+            Location.objects.filter(*filter_validity())
+            .filter(parent__parent__parent__usermunicipality__user=user.i_user)
+            .order_by("code")
+        )
+
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            pass
+        return queryset
+
+@receiver(post_save, sender=UserMunicipality)
+@receiver(post_delete, sender=UserMunicipality)
+def free_cache_post_user_district_save(sender, instance, **kwargs):
+    free_cache_for_user(instance.user_id)
 
 @receiver(post_save, sender=UserDistrict)
 @receiver(post_delete, sender=UserDistrict)

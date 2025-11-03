@@ -14,6 +14,7 @@ from location.models import (
     HealthFacility,
     UserDistrict,
     OfficerVillage,
+    UserMunicipality
 )
 from django.db.models import Field
 
@@ -177,6 +178,30 @@ class UserDistrictGQLType(graphene.ObjectType):
     def resolve_parent(self, info):
         return UserRegionGQLType(self.district.location.parent)
 
+class UserMunicipalityGQLType(graphene.ObjectType):
+    id = graphene.String()
+    uuid = graphene.String()
+    code = graphene.String()
+    name = graphene.String()
+    parent = graphene.Field(UserDistrictGQLType)
+
+    def __init__(self, municipality):
+        self.municipality = municipality
+
+    def resolve_id(self, info):
+        return str(base64.b64encode(f"LocationGQLType:{self.municipality.location_id}".encode()), "utf-8")
+
+    def resolve_uuid(self, info):
+        return str(self.municipality.location.uuid)
+
+    def resolve_code(self, info):
+        return str(self.municipality.location.code)
+
+    def resolve_name(self, info):
+        return str(self.municipality.location.name)
+
+    def resolve_parent(self, info):
+        return UserDistrictGQLType(self.municipality.location.parent)
 
 
 class UserDistrictType(DjangoObjectType):
@@ -193,6 +218,19 @@ class UserDistrictType(DjangoObjectType):
     def get_queryset(cls, queryset, info):
         return UserDistrict.get_queryset(queryset, info)
 
+class UserMunicipalityType(DjangoObjectType):
+    class Meta:
+        model = UserMunicipality
+        filter_fields = {
+            "id": ["exact"],
+            "user": ["exact"],
+            "location": ["exact"],
+        }
+        connection_class = ExtendedConnection
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return UserMunicipality.get_queryset(queryset, info)
 
 class OfficerVillageGQLType(DjangoObjectType):
     class Meta:

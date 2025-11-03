@@ -15,6 +15,7 @@ from location.models import (
     HealthFacility,
     HealthFacilityCatchment,
     UserDistrict,
+    UserMunicipality
 )
 
 
@@ -129,7 +130,7 @@ class LocationService:
             LocationConfig.gql_mutation_create_region_locations_perms
         ):
             pass
-        elif loc_type in ["R", "D"]:
+        elif loc_type in ["R", "D", "W"]:
             raise PermissionDenied(_("unauthorized_to_create_update_region_district"))
         elif not self.user.has_perms(
             LocationConfig.gql_mutation_create_locations_perms
@@ -144,10 +145,17 @@ class LocationService:
         location.female_population = None
         location.other_population = None
         location.families = None
+        location.parent = None
 
     def _ensure_user_belongs_to_district(self, location: Location):
         if location.type == "D":
             UserDistrict.objects.get_or_create(
+                user=self.user.i_user,
+                location=location,
+                audit_user_id=self.user.id_for_audit,
+            )
+        elif location.type == "W":
+            UserMunicipality.objects.get_or_create(
                 user=self.user.i_user,
                 location=location,
                 audit_user_id=self.user.id_for_audit,
